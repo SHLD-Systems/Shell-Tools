@@ -1,0 +1,67 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Initialize variables
+IDENTITY_FILE=""
+REMOTE_USER=""
+REMOTE_SERVER=""
+REMOTE_PATH=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -i)
+            IDENTITY_FILE="$2"
+            shift 2
+            ;;
+        -u)
+            REMOTE_USER="$2"
+            shift 2
+            ;;
+        -s)
+            REMOTE_SERVER="$2"
+            shift 2
+            ;;
+        -f)
+            REMOTE_PATH="$2"
+            shift 2
+            ;;
+        -h|--help)
+            echo "Usage: sendssh.sh [-i identity_file] -u remote_user -s remote_server -f remote_path"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Sanity checks
+if [[ -z "$REMOTE_USER" || -z "$REMOTE_SERVER" || -z "$REMOTE_PATH" ]]; then
+    echo "Error: missing required arguments" >&2
+    echo "Usage: sendssh.sh [-i identity_file] -u remote_user -s remote_server -f remote_path" >&2
+    exit 1
+fi
+
+# Extract remote directory part
+REMOTE_DIR=$(dirname "$REMOTE_PATH")
+
+# Build ssh command safely
+SSH_CMD=(ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts)
+
+if [[ -n "$IDENTITY_FILE" ]]; then
+    SSH_CMD+=(-i "$IDENTITY_FILE")
+fi
+
+SSH_CMD+=("${REMOTE_USER}@${REMOTE_SERVER}")
+
+# Pre-flight check: verify remote directory exists
+if ! "${SSH_CMD[@]}" "test -d '${REMOTE_DIR}'"; then
+    echo "Error: remote directory '${REMOTE_DIR}' does not exist on ${REMOTE_SERVER}" >&2
+    exit 2
+fi
+
+# Stream data to remote file
+"${SSH_CMD[@]}" "cat > '${REMOTE_PATH}'"

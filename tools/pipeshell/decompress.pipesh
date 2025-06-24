@@ -1,0 +1,48 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Default values
+ALGO="gzip"
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -a|--algo)
+            ALGO="$2"
+            shift 2
+            ;;
+        -h|--help)
+            echo "Usage: decompress.sh [-a algo]"
+            echo "Algorithms: gzip, pigz, bzip2, xz, zstd"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Dispatch
+case "$ALGO" in
+    gzip)
+        gzip -d
+        ;;
+    pigz)
+        pigz -d
+        ;;
+    bzip2)
+        bzip2 -d
+        ;;
+    xz)
+        xz -d
+        ;;
+    zstd)
+        zstd -d
+        ;;
+    *)
+        echo "Unsupported algorithm: $ALGO" >&2
+        exit 1
+        ;;
+esac

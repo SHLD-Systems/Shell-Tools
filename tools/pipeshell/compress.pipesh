@@ -1,0 +1,54 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Default values
+ALGO="gzip"
+LEVEL="6"
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -a|--algo)
+            ALGO="$2"
+            shift 2
+            ;;
+        -l|--level)
+            LEVEL="$2"
+            shift 2
+            ;;
+        -h|--help)
+            echo "Usage: compress.sh [-a algo] [-l level]"
+            echo "Algorithms: gzip, pigz, bzip2, xz, zstd"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Dispatch
+case "$ALGO" in
+    gzip)
+        gzip -"$LEVEL"
+        ;;
+    pigz)
+        pigz -"$LEVEL"
+        ;;
+    bzip2)
+        bzip2 -"$LEVEL"
+        ;;
+    xz)
+        xz -"$LEVEL"
+        ;;
+    zstd)
+        zstd -"$LEVEL"
+        ;;
+    *)
+        echo "Unsupported algorithm: $ALGO" >&2
+        exit 1
+        ;;
+esac
+

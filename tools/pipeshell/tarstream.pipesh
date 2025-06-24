@@ -1,0 +1,32 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Default values
+NULL_TERMINATED=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --null)
+            NULL_TERMINATED=true
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: tarstream.sh [--null]"
+            echo "  --null   : expect null-terminated input (safer for filenames with spaces)"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Read list from stdin and stream tar output
+if $NULL_TERMINATED; then
+    tar --null -T - -cf -
+else
+    tar -T - -cf -
+fi
