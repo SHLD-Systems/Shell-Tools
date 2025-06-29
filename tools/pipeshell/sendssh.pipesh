@@ -7,8 +7,16 @@ IDENTITY_FILE=""
 REMOTE_USER=""
 REMOTE_SERVER=""
 REMOTE_PATH=""
+CREATE_PATH=""
+CREATE_DIR=""
+REMOTE_DIR=""
+CREATE=false
 
-# Parse arguments
+usage() {
+echo "Usage: sendssh.sh [-i identity_file] -u remote_user -s remote_server (-f /remote/path/to/existing/directory) or (-c /remote/path/to/new/directory/)"
+}
+
+# Parse arguments - bad parsing for now, of course it's bash. It just takes input and interprets it and just shifts twice each time.
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -i)
@@ -28,40 +36,68 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -h|--help)
-            echo "Usage: sendssh.sh [-i identity_file] -u remote_user -s remote_server -f remote_path"
-            exit 0
+            usage
+			exit 0
             ;;
+		-c|--create)
+			CREATE_PATH="$2"
+			shift 2
+			;;			
         *)
             echo "Unknown option: $1" >&2
-            exit 1
+            usage
+			exit 1
             ;;
     esac
 done
 
-# Sanity checks
-if [[ -z "$REMOTE_USER" || -z "$REMOTE_SERVER" || -z "$REMOTE_PATH" ]]; then
-    echo "Error: missing required arguments" >&2
-    echo "Usage: sendssh.sh [-i identity_file] -u remote_user -s remote_server -f remote_path" >&2
-    exit 1
-fi
-
 # Extract remote directory part
-REMOTE_DIR=$(dirname "$REMOTE_PATH")
+if [[ "$REMOTE_PATH" != "" ]]; then
+	REMOTE_DIR=$(dirname "$REMOTE_PATH")
+fi
+if [[ "$CREATE_PATH" != "" ]]; then
+	CREATE_DIR=$(dirname "$CREATE_PATH")
+fi
 
 # Build ssh command safely
 SSH_CMD=(ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts)
+SSH_CMD_NOREAD=(ssh -n -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts)
+
+# Sanity checks
+if [ -z "$REMOTE_USER" ] || [ -z "$REMOTE_SERVER" ] || ([[ "$REMOTE_PATH" != "" ]] && [[ "$CREATE_PATH" != "" ]]) ; then
+    echo "Error: missing required arguments" >&2
+    echo "Usage: sendssh.sh [-i identity_file] -u remote_user -s remote_server -f remote_path" >&2
+    exit 1
+elif [[ "$CREATE_PATH" != "" ]]; then
+	CREATE=true
+fi
 
 if [[ -n "$IDENTITY_FILE" ]]; then
     SSH_CMD+=(-i "$IDENTITY_FILE")
+	SSH_CMD_NOREAD+=(-i "$IDENTITY_FILE")
 fi
 
 SSH_CMD+=("${REMOTE_USER}@${REMOTE_SERVER}")
+SSH_CMD_NOREAD+=("${REMOTE_USER}@${REMOTE_SERVER}")
 
-# Pre-flight check: verify remote directory exists
-if ! "${SSH_CMD[@]}" "test -d '${REMOTE_DIR}'"; then
-    echo "Error: remote directory '${REMOTE_DIR}' does not exist on ${REMOTE_SERVER}" >&2
-    exit 2
+# Connectivity check:
+if ! "${SSH_CMD_NOREAD[@]}" "true"; then
+echo "Could not connect to remote server."
+exit 2
 fi
 
+# Pre-check: verify remote directory exists, else if creation is promted, send a command to create the remote directory.
+if (! $CREATE) && (! "${SSH_CMD_NOREAD[@]}" "test -d '${REMOTE_DIR}'"); then
+    echo "Error: remote directory '${REMOTE_DIR}' does not exist on ${REMOTE_SERVER}. Use the \"create\" option (-c)." >&2
+    exit 2
+elif $CREATE; then
+	"${SSH_CMD_NOREAD[@]}" "mkdir -p '${CREATE_DIR}'" || (echo "Fatal: Could not Create Remote Directory."; exit 2;)
+fi
+
+
 # Stream data to remote file
+if ! $CREATE; then
 "${SSH_CMD[@]}" "cat > '${REMOTE_PATH}'"
+else
+"${SSH_CMD[@]}" "cat > '${CREATE_PATH}'"
+fi
