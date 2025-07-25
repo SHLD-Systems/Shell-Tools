@@ -31,6 +31,6 @@ echo "Installing files into: $TARGET_DIR"
 
 count=0
 
-find "${script_dir}" -type f -name "*.install" | while read -r line; do cp "$line" "$TARGET_DIR/${line%.install}"; count=$((count + 1)); done
+find "${script_dir}" -type f -name "*.install" | while read -r line; do filename=$(basename ${line%.install}); echo "Installing $filename..."; cp "$line" "$TARGET_DIR/$filename"; count=$((count + 1)); done
 
 echo "Installed $count scripts successfully."
