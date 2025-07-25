@@ -34,7 +34,7 @@ count=0
 while read -r line; do
     filename=$(basename "${line%.install}")
     echo "Installing $filename..."
-    cp "$line" "$TARGET_DIR/$filename"
+    cp --preserve=mode "$line" "$TARGET_DIR/$filename"
     count=$((count + 1))
 done < <(find "${script_dir}" -type f -name "*.install")
 
