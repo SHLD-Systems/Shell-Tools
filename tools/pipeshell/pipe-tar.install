@@ -13,7 +13,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h|--help)
-            echo "Usage: tarstream.sh [--null]"
+            echo "Usage: $0 [--null]"
             echo "  --null   : expect null-terminated input (safer for filenames with spaces)"
             exit 0
             ;;

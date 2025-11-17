@@ -13,7 +13,7 @@ REMOTE_DIR=""
 CREATE=false
 
 usage() {
-echo "Usage: sendssh.sh [-i identity_file] -u remote_user -s remote_server (-f /remote/path/to/existing/directory) or (-c /remote/path/to/new/directory/)"
+echo "Usage: $0 [-i identity_file] -u remote_user -s remote_server (-f /remote/path/to/existing/directory) or (-c /remote/path/to/new/directory/)"
 }
 
 # Parse arguments - bad parsing for now, of course it's bash. It just takes input and interprets it and just shifts twice each time.

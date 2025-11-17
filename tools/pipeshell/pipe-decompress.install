@@ -13,7 +13,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -h|--help)
-            echo "Usage: decompress.sh [-a algo]"
+            echo "Usage: $0 [-a algo]"
             echo "Algorithms: gzip, pigz, bzip2, xz, zstd"
             exit 0
             ;;

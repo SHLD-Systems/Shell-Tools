@@ -17,7 +17,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -h|--help)
-            echo "Usage: untar.sh [-l|--list] [-d|--dest DIR]"
+            echo "Usage: $0 [-l|--list] [-d|--dest DIR]"
             echo "  -l, --list   : list contents instead of extracting"
             echo "  -d, --dest   : extract into DIR (default: current directory)"
             exit 0
