@@ -1,5 +1,6 @@
 #!/bin/bash
 EXITED=false
+PORT=''
 PID=''
 REMOTE=''
 MOUNTPOINT=''
@@ -33,9 +34,14 @@ case $1 in
 	USER="$1"
 	shift
 	;;
-	"-p")
+	"-x")
 	shift
 	PASSWORD="$1"
+	shift
+	;;
+	"-p")
+	shift
+	PORT="$1"
 	shift
 	;;
 	"-h")
@@ -62,20 +68,22 @@ echo "Password file doesn't exist."; exit 1
 else
 PASSWORD=$(cat "$PASSWORD" | grep password | awk -F '=' '{print $2}')
 fi
-
+if [[ "$PORT" =~ [^0-9] ]]; then 	#Inverted match for pure numerical inputs
+echo "Port $PORT invalid. Abort."
+fi
 
 
 # Function to clean up
 cleanup() {
 if $EXITED; then
     echo "Unmounting $MOUNTPOINT..."
-    fusermount -u "$MOUNTPOINT"
+    fusermount -u "$MOUNTPOINT"				# Exit catch all, process is alive until needed.
     EXITED=true
     exit
 fi
 }
 
-# Catch signals
+# Catch signals (attention to systemd signal types and timeouts)
 trap cleanup SIGINT SIGTERM EXIT
 
 # Test function, to see if connection succeeds and creds are good.
@@ -86,18 +94,24 @@ fi
 
 
 # Actual daemon logic
-echo "$PASSWORD" | sshfs "${USER}"@"${HOST}":"${REMOTE}" "$MOUNTPOINT" -o password_stdin -o reconnect
+echo "$PASSWORD" | sshfs -p "${PORT}" "${USER}"@"${HOST}":"${REMOTE}" "$MOUNTPOINT" -o password_stdin -o reconnect
 PID=$(pgrep -f "sshfs.*${USER}@${HOST}:${REMOTE}.*${MOUNTPOINT}")
 
-echo "PID:  $PID"
+echo "PID:  $PID"			# I Use a pid to then loop every second to check if it's still there.
 
 if [[ $PID != '' ]]; then
 echo "sshfs Process on PID $PID"
 else
-echo "No sshfs PID Registered. Aborting"; exit 1
+echo "No sshfs PID Registered. Aborting"; exit 1			
 fi
 
 # Keep script alive until unmount
-while ps -p $PID > /dev/null; do
+while ps -p $PID > /dev/null; do		# loop logic
 sleep 1
 done
+
+
+exit 0
+
+
+# Loop ends if sshfs child proc is killed by another process. Ends script with 0 and doesn't restart.
