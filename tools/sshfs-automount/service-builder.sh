@@ -1,6 +1,32 @@
 #!/usr/bin/env bash
 
-set -e
+function create_password_file() {
+	file="$1"
+	if [ ! -d $(dirname "$file") ]; then
+		echo "Path to creds file non-existent, creating file in install folder instead."
+		file="${install_folder}/creds.txt"
+		declare -g arg_x="$file"
+	fi
+	echo "Creating Credentials File..."
+	touch "${file}"
+	echo "#Add your Network Share Secret Here" >> "${file}"
+	echo "password=" >> "${file}"
+	nano "${file}"
+	chmod u=r,go-rwx "${file}"
+}
+function create_key_file() {
+	file="$1"
+	if [ ! -d $(dirname "$file") ]; then
+		echo "Path to private key file non-existent, creating file in install folder instead."
+		file="${install_folder}/id_rsa.key"
+		declare -g arg_i="$file"
+	fi
+	echo "Creating private key file..."
+	read -p "Press enter to be brought into a nano window to paste the private key..."
+	nano "${file}"
+	chmod u=r,go-rwx "${file}"
+
+}
 
 start_folder="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 svc_install_dir="/etc/systemd/system"
@@ -12,38 +38,43 @@ while [[ $# -gt 0 ]]; do
 	auto_arg=true 
 	case $1 in
 		"-r")
-		shift
-		arg_r="$1"
-		shift
-		;;
+			shift
+			arg_r="$1"
+			shift
+			;;
 		"-m")
-		shift
-		arg_m="$1"
-		shift
-		;;
+			shift
+			arg_m="$1"
+			shift
+			;;
 		"-u")
-		shift
-		arg_user="$1"
-		shift
-		;;
+			shift
+			arg_user="$1"
+			shift
+			;;
 		"-x")
-		shift
-		arg_x="$1"
-		shift
-		;;
+			shift
+			arg_x="$1"
+			shift
+			;;
+		"-i")
+			shift
+			arg_i="$1"
+			shift
+			;;
 		"-p")
-		shift
-		arg_port="$1"
-		shift
-		;;
+			shift
+			arg_port="$1"
+			shift
+			;;
 		"-h")
-		shift
-		arg_host="$1"
-		shift
-		;;
+			shift
+			arg_host="$1"
+			shift
+			;;
 		*)
-		echo "Option Unrecognized: $1"
-		exit 1
+			echo "Option Unrecognized: $1"
+			exit 1
 	esac
 done
 
@@ -86,31 +117,78 @@ fi
 # Second checks if the cred file exists already for some reason. IF not, it let's the user create it via the template.
 # In all these cases, the file is set to strict permissions for reading.
 
-if [ -z $arg_x ]; then
-arg_x="${install_folder}/creds.txt"
-fi
+if [ -z "$arg_x" ] && [ -z "$arg_i" ];then
+	
 
-if [ ! -e $arg_x ]; then
+	while :; do
+		
+		printf "Please specify if you intend to login with:\n(1) password\n(2) keyfile\n\n"
+		read -p "1 or 2? " choice
+		
+		case "$choice" in
 
-	if [ ! -d $(dirname "$arg_x") ]; then
-	echo "Path to creds file non-existent, creating file in install folder instead."
-	arg_x="${install_folder}/creds.txt"
-	fi
+			"1")
+				arg_x="${install_folder}/creds.txt"
+				if [ ! -r "$arg_x" ]; then
+					create_password_file "$arg_x"
+					break
+				else
+					break
+				fi
+				;;
+			"2")
+				arg_i="${install_folder}/id_rsa.txt"
+				if [ ! -r "$arg_i" ]; then
+					create_key_file "$arg_i"
+					break
+				else
+					break
+				fi
+				;;
+			*)
+				echo "The choice you entered is invalid. Retry."
+				continue
 
-	echo "Creating Credentials File..."
-	> "${arg_x}"
-	echo "#Add your Network Share Secret Here" >> "${arg_x}"
-	echo "password=" >> "${arg_x}"
-	nano "${arg_x}"
+		esac
+
+	done
+
+elif [ -n "$arg_x" ] && [ -n "$arg_i" ];then
+	
+	echo "Provided both keyfile and password arguments. These are exclusive, provide only one. Aborting."; exit 1
+
+elif [ -n "$arg_x" ] && [ ! -r "$arg_x" ]; then
+	
+	echo "Supplied an invalid password file location. Creating one manually in the install dir..."
+	create_password_file "$arg_x"
+
+elif [ -n "$arg_x" ] && [ -r "$arg_x" ]; then
+	
 	chmod u=r,go-rwx "${arg_x}"
+
+elif [ -n "$arg_i" ] && [ ! -r "$arg_i" ]; then
+	
+	echo "Supplied an invalid key file location. Creating one manually in the install dir..."
+	create_key_file "$arg_i"
+
+elif [ -n "$arg_i" ] && [ -r "$arg_i" ]; then
+        
+	chmod u=r,go-rwx "${arg_i}"
+
 else
-	chmod u=r,go-rwx "${arg_x}"
+	echo "Uncaught exception in password/keyfile interactive routine, aborting."; exit 1
 fi
+
+
 
 # Construct ExecStart command
-exec_cmd=("${install_folder}/net-share-SSH.sh" -u "${arg_user}" -h "${arg_host}" -m "${arg_m}" -r "${arg_r}" -x "${arg_x}" -p "${arg_port}")
-svc_file="${svc_install_dir}/${svc_name}.service"
+if [ -n "$arg_x" ]; then
+	exec_cmd=("${install_folder}/net-share-SSH.sh" -u "${arg_user}" -h "${arg_host}" -m "${arg_m}" -r "${arg_r}" -x "${arg_x}" -p "${arg_port}")
+elif [ -n "$arg_i" ]; then
+	exec_cmd=("${install_folder}/net-share-SSH.sh" -u "${arg_user}" -h "${arg_host}" -m "${arg_m}" -r "${arg_r}" -i "${arg_i}" -p "${arg_port}")
+fi
 
+svc_file="${svc_install_dir}/${svc_name}.service"
 read -p "Perform ssh connectivity check for validity of credentials and presence of available storage? y/n  " cond_test
 
 if [[ "$cond_test" == "y" || "$cond_test" == "Y" || "$cond_test" == "yes" ]]; then 

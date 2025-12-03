@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# Vars definitions
+
 EXITED=false
 PORT=''
 PID=''
@@ -8,6 +11,18 @@ PASSWORD=''
 USER=''
 HOST=''
 TEST=false
+
+# Util functions
+
+sanitize_string() {
+    local input="$1"
+    # Remove " and '
+    input="${input//\"/}"
+    input="${input//\'/}"
+    printf '%s' "$input"
+}
+
+
 
 if [[ $# -le 1 ]]; then
 echo "Please Provide Useful Options."; exit 1
@@ -39,6 +54,11 @@ case $1 in
 	PASSWORD="$1"
 	shift
 	;;
+	"-i")
+	shift
+	KEYFILE="$1"
+	shift
+	;;
 	"-p")
 	shift
 	PORT="$1"
@@ -55,21 +75,32 @@ case $1 in
 esac
 done
 
-if [[ $REMOTE == '' || $MOUNTPOINT == '' || $USER == '' || $PASSWORD == '' || $HOST == ''  ]]; then
-	echo "Options not specified. Aborting."; exit 1
+# Sanity checks and contitionals on arguments
+
+MOUNTPOINT=$(sanitize_string "$MOUNTPOINT")
+REMOTE=$(sanitize_string "$REMOTE")
+
+
+if [ -n "$KEYFILE" ] && [ -n "$PASSWORD" ]; then
+echo "Please specify only a password file (-x) or a key file (-i), not both." >&2; exit 1
+fi
+
+
+if [[ $REMOTE == '' || $MOUNTPOINT == '' || $USER == '' ||  $HOST == ''  ]]; then
+	echo "Some critical options weren't specified. Aborting." >&2 ; exit 1
 fi
 
 
 if [ ! -d "$MOUNTPOINT" ]; then
-echo "Mount Folder $MOUNTPOINT  Not Found. Aborting." >&2; exit 1
+	echo "Mount Folder $MOUNTPOINT not found. Aborting." >&2; exit 1
 fi
-if [ ! -e "$PASSWORD" ]; then
-echo "Password file doesn't exist."; exit 1
-else
-PASSWORD=$(cat "$PASSWORD" | grep password | awk -F '=' '{print $2}')
+
+if [ -n "$PASSWORD" ]; then
+	PASSWORD=$(cat "$PASSWORD" | grep password | awk -F '=' '{print $2}')
 fi
+
 if [[ "$PORT" =~ [^0-9] ]]; then 	#Inverted match for pure numerical inputs
-echo "Port $PORT invalid. Abort."
+	echo "Port $PORT invalid. Abort." >&2; exit 1
 fi
 
 
@@ -86,30 +117,65 @@ fi
 # Catch signals (attention to systemd signal types and timeouts)
 trap cleanup SIGINT SIGTERM EXIT
 
-# Test function, to see if connection succeeds and creds are good.
-if $TEST; then
-sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "$USER@$HOST" "[ -d \"$REMOTE\" ]" > /dev/null 2>&1; rc=$?
-exit $rc
+if [ -n "$PASSWORD" ]; then
+
+	echo "WARNING! Running insecure password method. Consider using keyfile option (-i)."
+	# Test function, to see if connection succeeds and creds are good.
+	if $TEST; then
+		export SSHPASS="$PASSWORD"		#ssh password supplied to sshpass via envvar (-e switch)
+		sshpass -e ssh -o StrictHostKeyChecking=no "$USER@$HOST" "[ -d \"$REMOTE\" ]" > /dev/null 2>&1; rc=$?
+		exit $rc
+	fi
+
+
+	# Actual daemon logic
+	echo "$PASSWORD" | sshfs -p "${PORT}" "${USER}"@"${HOST}":"${REMOTE}" "$MOUNTPOINT" -o password_stdin -o reconnect
+	PID=$(pgrep -f "sshfs.*${USER}@${HOST}:${REMOTE}.*${MOUNTPOINT}")
+
+	echo "PID:  $PID"			# I Use a pid to then loop every second to check if it's still there.
+
+	if [[ $PID != '' ]]; then
+		echo "sshfs Process on PID $PID"
+	else
+		echo "No sshfs PID Registered. Aborting"; exit 1
+	fi
+
+	# Keep script alive until unmount
+	while ps -p "$PID" > /dev/null; do		# loop logic
+		sleep 1
+	done
+
+elif [ -n "$KEYFILE" ]; then
+
+	if [ ! -r "$KEYFILE" ]; then
+		echo "Keyfile not readable or nonexistent. Aborting."; exit 1
+	fi
+
+	if $TEST; then
+		ssh -i "$KEYFILE"  "$USER@$HOST" "[ -d \"$REMOTE\" ]" > /dev/null 2>&1; rc=$?
+		exit $rc
+	fi
+
+
+	# Actual daemon logic
+	sshfs -o IdentityFile="$KEYFILE" -p "${PORT}" "${USER}"@"${HOST}":"${REMOTE}" "$MOUNTPOINT" -o password_stdin -o reconnect
+	PID=$(pgrep -f "sshfs.*${USER}@${HOST}:${REMOTE}.*${MOUNTPOINT}")
+
+	echo "PID:  $PID"                       # I Use a pid to then loop every second to check if it's still there.
+
+	if [[ "$PID" != '' ]]; then
+		echo "sshfs Process on PID $PID"
+	else
+		echo "No sshfs PID Registered. Aborting"; exit 1
+	fi
+
+	# Keep script alive until unmount
+	while ps -p "$PID" > /dev/null; do                # loop logic
+		sleep 1
+	done
+
+
 fi
-
-
-# Actual daemon logic
-echo "$PASSWORD" | sshfs -p "${PORT}" "${USER}"@"${HOST}":"${REMOTE}" "$MOUNTPOINT" -o password_stdin -o reconnect
-PID=$(pgrep -f "sshfs.*${USER}@${HOST}:${REMOTE}.*${MOUNTPOINT}")
-
-echo "PID:  $PID"			# I Use a pid to then loop every second to check if it's still there.
-
-if [[ $PID != '' ]]; then
-echo "sshfs Process on PID $PID"
-else
-echo "No sshfs PID Registered. Aborting"; exit 1			
-fi
-
-# Keep script alive until unmount
-while ps -p $PID > /dev/null; do		# loop logic
-sleep 1
-done
-
 
 exit 0
 
