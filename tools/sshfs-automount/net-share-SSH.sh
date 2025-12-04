@@ -80,6 +80,11 @@ done
 MOUNTPOINT=$(sanitize_string "$MOUNTPOINT")
 REMOTE=$(sanitize_string "$REMOTE")
 
+## Check if local mountpoint is busy:
+if mount | grep -q "$MOUNTPOINT"; then
+	echo "Local Mountpoint: \"$MOUNTPOINT\" is busy. Aborting." >&2; exit 1
+fi
+
 
 if [ -n "$KEYFILE" ] && [ -n "$PASSWORD" ]; then
 echo "Please specify only a password file (-x) or a key file (-i), not both." >&2; exit 1
