@@ -1,39 +1,57 @@
 #!/bin/bash
 
+function help() {
+
+    echo "Usage: $0 [-p password-file] [-c cipher]"
+    echo "Available ciphers: aes-256-cbc, aes-192-cbc, aes-128-cbc"
+    echo "If no password file is provided, ENC_PSWD envvar is expected to be set."
+
+}
+function help_err() {
+
+    echo "Usage: $0 [-p password-file] [-c cipher]" 2>&1
+    echo "Available ciphers: aes-256-cbc, aes-192-cbc, aes-128-cbc" 2>&1
+    echo "If no password file is provided, ENC_PSWD envvar is expected to be set." 2>&1
+
+}
+
 set -euo pipefail
 
 # Default values
 CIPHER="aes-256-cbc"
 
-# Check mandatory argument: password
-if [[ $# -lt 1 ]]; then
-    echo "Usage: $0 password [-c cipher]"
-    echo "Available ciphers: aes-256-cbc, aes-192-cbc, aes-128-cbc"
-    exit 1
-fi
-
-PASSWORD="$1"
-shift
 
 # Parse optional arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        -p|--password)
+            PASSWORD="$2"
+            shift 2
+            ;;
         -c|--cipher)
             CIPHER="$2"
             shift 2
             ;;
         -h|--help)
-            echo "Usage: encrypt.sh password [-c cipher]"
-            echo "Available ciphers: aes-256-cbc, aes-192-cbc, aes-128-cbc"
+            help
             exit 0
             ;;
         *)
-            echo "Unknown option: $1" >&2
+            printf "Unknown option: $1\n\n" >&2
+            help_err
             exit 1
             ;;
     esac
 done
 
-# Encrypt the stream
-openssl enc -"${CIPHER}" -salt -pbkdf2 -pass pass:"${PASSWORD}"
+if [[ ! -v ENC_PSWD ]] && [[ ! -v PASSWORD ]]; then
+    help_err
+    exit 1
+fi
 
+# Encrypt the stream
+if [[ -v ENC_PSWD ]]; then
+    openssl enc -"${CIPHER}" -salt -pbkdf2 -pass env:ENC_PSWD
+else
+    openssl enc -"${CIPHER}" -salt -pbkdf2 -pass file:"${PASSWORD}"
+fi
