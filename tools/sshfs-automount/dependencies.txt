@@ -1,0 +1,7 @@
+
+Dependencies: 
+
+bash
+sshfs
+systemd
+nano
