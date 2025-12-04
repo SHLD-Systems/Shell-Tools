@@ -1,0 +1,14 @@
+[Unit]
+Description=Net‑Share SSH service for ${arg_user}@${arg_host}
+After=network.target
+
+[Service]
+Type=simple
+User=${svc_user}
+# WorkingDirectory could be set if script needs a specific CWD
+ExecStart=${exec_cmd[@]}
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

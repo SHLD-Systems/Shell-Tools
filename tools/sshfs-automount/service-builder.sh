@@ -213,22 +213,15 @@ fi
 
 echo "Creating service file at ${svc_file} …"
 
-cat <<EOF | sudo tee "${svc_file}"
-[Unit]
-Description=Net‑Share SSH service for ${arg_user}@${arg_host}
-After=network.target
 
-[Service]
-Type=simple
-User=${svc_user}
-# WorkingDirectory could be set if script needs a specific CWD
-ExecStart=${exec_cmd[@]}
-Restart=on-failure
-RestartSec=10s
+## Take file from template in start folder and error out on exception.
 
-[Install]
-WantedBy=multi-user.target
-EOF
+if [ -r "${start_folder}/svc_template.txt" ]; then
+	cat "${start_folder}/svc_template.txt" | sudo tee "${svc_file}"
+else
+	echo "svc_template.txt not found in start folder: ${start_folder}. Aborting." >&2; exit 1
+fi
+
 
 echo "Setting permissions …"
 sudo chmod 644 "${svc_file}"
