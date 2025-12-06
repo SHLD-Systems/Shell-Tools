@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+err() {
+    echo "ERROR: $*" >&2
+}
+
+if [[ $# -ne 1 ]]; then
+    err "Usage: $0 <mount-directory>"
+    exit 1
+fi
+
+MOUNT_DIR="$1"
+DIRS=("sys" "proc" "dev")
+
+# Unmount bind-mounts if present
+for d in "${DIRS[@]}"; do
+    if [[ -d "$MOUNT_DIR/$d" ]]; then
+        if umount "$MOUNT_DIR/$d"; then
+            echo "Unmounted $MOUNT_DIR/$d"
+        else
+            err "Failed to unmount $MOUNT_DIR/$d"
+        fi
+    fi
+done
+
+# Unmount the main mount
+if [[ -d "$MOUNT_DIR" ]]; then
+    if umount "$MOUNT_DIR"; then
+        echo "Unmounted container root: $MOUNT_DIR"
+    else
+        err "Failed to unmount root container directory: $MOUNT_DIR"
+    fi
+fi
+
+exit 0

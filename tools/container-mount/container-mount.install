@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+err() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+if [[ $# -lt 2 ]]; then
+    err "Usage: $0 <mount-directory> <block-device> [--enter]"
+fi
+
+ENTER=false
+MOUNT_DIR="$1"
+BLOCK_DEV="$2"
+if [[ $# -eq 3 ]]; then if [[ "$3" == "--enter" ]]; then ENTER=true; fi; fi
+DIRS=("sys" "proc" "dev")
+
+# Check mountpoint exists
+[[ -d "$MOUNT_DIR" ]] || err "Mount directory '$MOUNT_DIR' does not exist."
+
+# Ensure the device exists
+[[ -b "$BLOCK_DEV" ]] || err "Device '$BLOCK_DEV' does not exist or is not a block device."
+
+# Check if mount directory is already in use
+if mountpoint -q "$MOUNT_DIR"; then
+    err "Mount directory '$MOUNT_DIR' is already mounted."
+fi
+
+echo "Mounting $BLOCK_DEV on $MOUNT_DIR ..."
+if ! mount "$BLOCK_DEV" "$MOUNT_DIR"; then
+    err "Failed to mount '$BLOCK_DEV' on '$MOUNT_DIR'."
+fi
+
+echo "Mount successful."
+
+# Bind-mount system dirs
+for d in "${DIRS[@]}"; do
+    echo "Bind-mounting /$d ..."
+    mkdir -p "$MOUNT_DIR/$d"
+    if ! mount --bind "/$d" "$MOUNT_DIR/$d"; then
+        err "Failed to bind-mount /$d to $MOUNT_DIR/$d"
+    fi
+done
+
+echo "All mounts complete."
+
+if $ENTER; then
+	clear
+	exec chroot "$MOUNT_DIR"
+fi
+
+exit 0
