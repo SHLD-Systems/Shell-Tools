@@ -88,7 +88,6 @@ if [[ $auto_arg == false ]]; then
 	read -p "Enter remote user argument: " arg_user
 	read -p "Enter local path: " arg_m
 	read -p "Enter remote mount path: " arg_r
-	read -p "Enter creds file path (default - same as installation dir): " arg_x
 fi
 
 # Checking presence of executable
@@ -119,8 +118,9 @@ fi
 
 if [ -z "$arg_x" ] && [ -z "$arg_i" ];then
 	
+	main=true
 
-	while :; do
+	while $main; do
 		
 		printf "Please specify if you intend to login with:\n(1) password\n(2) keyfile\n\n"
 		read -p "1 or 2? " choice
@@ -128,22 +128,53 @@ if [ -z "$arg_x" ] && [ -z "$arg_i" ];then
 		case "$choice" in
 
 			"1")
-				arg_x="${install_folder}/creds.txt"
-				if [ ! -r "$arg_x" ]; then
-					create_password_file "$arg_x"
-					break
-				else
-					break
-				fi
+				while :; do
+					echo "Enter path to password file:"
+					read -p "Path: " arg_x
+
+					if [ ! -r "$arg_x" ]; then
+						echo "Provided path is unreadable."
+						read -p "Provide a new path or create a file at the specified path? p/c  " choice
+						if [[ "$choice" != "p" && "$choice" != "c" ]]; then
+							echo "invalid choice."
+							continue
+						elif [[ "$choice" == "p" ]]; then
+							continue
+						else
+							create_password_file "$arg_x"
+							main=false
+							break
+						fi
+
+					else
+						main=false
+						break
+					fi
+				done
 				;;
 			"2")
-				arg_i="${install_folder}/id_rsa.txt"
-				if [ ! -r "$arg_i" ]; then
-					create_key_file "$arg_i"
-					break
-				else
-					break
-				fi
+				while :; do
+					echo "Enter path to key file:"
+					read -p "Path: " arg_i
+
+					if [ ! -r "$arg_i" ]; then
+						echo "Provided path is unreadable."
+						read -p "Provide a new path or create a file at the specified path? p/c  " choice
+						if [[ "$choice" != "p" && "$choice" != "c" ]]; then
+							echo "invalid choice."
+							continue
+						elif [[ "$choice" == "p" ]]; then
+							continue
+						else
+							create_key_file "$arg_i"
+							main=false
+							break
+						fi
+					else
+						main=false
+						break
+					fi
+				done
 				;;
 			*)
 				echo "The choice you entered is invalid. Retry."
@@ -183,9 +214,12 @@ fi
 
 # Construct ExecStart command
 if [ -n "$arg_x" ]; then
+	echo "Debug: Creating exec_cmd with password setting"
 	exec_cmd=("${install_folder}/net-share-SSH.sh" -u "${arg_user}" -h "${arg_host}" -m "${arg_m}" -r "${arg_r}" -x "${arg_x}" -p "${arg_port}")
 elif [ -n "$arg_i" ]; then
+	echo "Debug: Creating exec_cmd with keyfile setting"
 	exec_cmd=("${install_folder}/net-share-SSH.sh" -u "${arg_user}" -h "${arg_host}" -m "${arg_m}" -r "${arg_r}" -i "${arg_i}" -p "${arg_port}")
+	echo "${exec_cmd[@]}"
 fi
 
 svc_file="${svc_install_dir}/${svc_name}.service"
@@ -214,14 +248,22 @@ fi
 echo "Creating service file at ${svc_file} …"
 
 
-## Take file from template in start folder and error out on exception.
+## Create unit file
+	
+sudo tee "$svc_file" > /dev/null <<EOF
+[Unit]
+Description=Net-Share SSH service for ${arg_user}@${arg_host}
+After=network.target
 
-if [ -r "${start_folder}/svc_template.txt" ]; then
-	cat "${start_folder}/svc_template.txt" | sudo tee "${svc_file}"
-else
-	echo "svc_template.txt not found in start folder: ${start_folder}. Aborting." >&2; exit 1
-fi
+[Service]
+Type=simple
+User=${svc_user}
+ExecStart=${exec_cmd[@]}
 
+[Install]
+WantedBy=multi-user.target
+EOF
+	
 
 echo "Setting permissions …"
 sudo chmod 644 "${svc_file}"
