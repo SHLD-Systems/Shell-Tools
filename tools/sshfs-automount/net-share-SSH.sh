@@ -101,7 +101,7 @@ if [ ! -d "$MOUNTPOINT" ]; then
 fi
 
 if [ -n "$PASSWORD" ]; then
-	PASSWORD=$(cat "$PASSWORD" | grep password | awk -F '=' '{print $2}')
+	PASSWORD=$(cat "$PASSWORD" | grep password | awk -F '=' '{for(i=2;i<=NF;i++) printf "%s%s",$i,(i<NF?OFS:ORS)}')
 fi
 
 if [[ "$PORT" =~ [^0-9] ]]; then 	#Inverted match for pure numerical inputs
