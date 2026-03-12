@@ -48,6 +48,7 @@ API_TOKEN="$API_TOKEN"
 ZONE_ID="$ZONE_ID"
 RECORD_ID="$RECORD_ID"
 DOMAIN="$DOMAIN"
+INSTALL_METHOD=""
 EOF
 
 sudo chmod 600 "$CONFIG_FILE"
@@ -72,6 +73,7 @@ if [ "$OPTION" = "1" ]; then
     echo "Installing cron job..."
 
     (crontab -l 2>/dev/null; echo "*/5 * * * * $INSTALL_DIR/$SCRIPT_NAME") | crontab -
+    sudo sed -i 's/INSTALL_METHOD=""/INSTALL_METHOD="cron"/' "$CONFIG_FILE"
 
     echo "Cron job installed."
 
@@ -87,6 +89,7 @@ $INSTALL_DIR/$SCRIPT_NAME
 EOF
 
     sudo chmod +x "$DISPATCHER"
+    sudo sed -i 's/INSTALL_METHOD=""/INSTALL_METHOD="networkmanager"/' "$CONFIG_FILE"
 
     echo "Dispatcher installed."
 
